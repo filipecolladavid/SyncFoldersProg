@@ -1,9 +1,9 @@
 import filecmp
-import hashlib
 import shutil
 import sys
 import os
-# TODO - use os.path.join() to join file paths
+import time
+
 # TODO - To be checked with program performance
 MIN_SYNC_INT = 500
 
@@ -61,6 +61,7 @@ def sync_files(source, replica, log_path):
     Args:
         source (str): The path to the source directory.
         replica (str): The path to the replica directory
+        log_path(str): The path to the log file
     """
     try:
         dcmp = filecmp.dircmp(source, replica)
@@ -146,7 +147,11 @@ def main(args):
     if sync_int < MIN_SYNC_INT:
         raise ValueError("The synchronization interval is too low")
 
-    sync_files(source_path, replica_path, log_path)
+    while True:
+        if not sync_files(source_path, replica_path, log_path):
+            raise RuntimeError("Synchronization failed. Check source and replica paths.")
+        # Convert sync interval from ms to seconds
+        time.sleep(sync_int / 1000.0)
 
 
 if __name__ == "__main__":
