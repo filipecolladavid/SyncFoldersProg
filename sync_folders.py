@@ -1,4 +1,6 @@
 import filecmp
+import hashlib
+import shutil
 import sys
 import os
 # TODO - use os.path.join() to join file paths
@@ -17,15 +19,14 @@ def file_exists(dir):
     if not os.path.isfile(dir):
         raise FileNotFoundError(f"File {dir} does not exist")
 
+
 # Prints in log_file
-
-
 def print_log(action, log_path, file_dest, file_source=None):
 
     with open(log_path, 'a') as f:
         if file_source:
             # Write COPY file_source file_dest
-            f.write("COPY:   "+file_source+" -> "+file_dest)
+            f.write("COPY:   "+file_source+"  ->  "+file_dest+"\n")
             return
 
         if action == "create":
@@ -39,11 +40,16 @@ def print_log(action, log_path, file_dest, file_source=None):
             return
 
 
-def copy_file(source, replica):
+# Copy file from source to replica
+def copy_file(source, replica, replace=False):
     with open(source, 'rb') as f:
         data = f.read()
     file_name = os.path.basename(source)
-    new_file = os.path.join(replica, file_name)
+    if replace:
+        new_file = replica
+    else:
+        new_file = os.path.join(replica, file_name)
+
     with open(new_file, 'wb') as f:
         f.write(data)
 
@@ -54,29 +60,68 @@ def sync_files(source, replica, log_path):
 
     Args:
         source (str): The path to the source directory.
-        replica (str): The path to the replica directory.
-
-    Returns:
-        list: A list of files that are different between the two directories, with their full path.
+        replica (str): The path to the replica directory
     """
+    try:
+        dcmp = filecmp.dircmp(source, replica)
+    except OSError as e:
+        print(f"Error: {e}")
+        return False
 
-    dcmp = filecmp.dircmp(source, replica)
+    # To be replaced in replica
+    for file in dcmp.diff_files:
+        pathL = os.path.join(dcmp.left, file)
+        pathR = os.path.join(dcmp.right, file)
+        try:
+            copy_file(pathL, pathR, replace=True)
+        except (OSError, IOError) as e:
+            print(f"Error: {e}")
+            return False
+        print_log("COPY", log_path, pathR, pathL)
+
+    # To be removed from replica
+    for dir in dcmp.right_only:
+        pathR = os.path.join(dcmp.right, dir)
+        # Delete extra directories from replica
+        if os.path.isdir(pathR):
+            try:
+                shutil.rmtree(pathR)
+            except OSError as e:
+                print(f"Error: {e}")
+                return False
+        # Delete extra files from replica
+        else:
+            try:
+                os.remove(pathR)
+            except OSError as e:
+                print(f"Error: {e}")
+                return False
+        print_log("remove", log_path, pathR)
 
     # To be coppied to replica
     for dir in dcmp.left_only:
         pathL = os.path.join(dcmp.left, dir)
         pathR = os.path.join(dcmp.right, dir)
-
         # Non-existing directories in Replica
         if os.path.isdir(pathL):
-            os.mkdir(pathR)
+            try:
+                os.mkdir(pathR)
+            except OSError as e:
+                print(f"Error: {e}")
+                return False
             print_log("create", log_path, pathR)
-            # sync_files(pathL, pathR, log_path)
+            sync_files(pathL, pathR, log_path)
 
         # Non existing files in Replica
         else:
-            copy_file(pathL, dcmp.right)
+            try:
+                copy_file(pathL, dcmp.right)
+            except (OSError, IOError) as e:
+                print(f"Error: {e}")
+                return False
             print_log("copy", log_path, pathR, pathL)
+
+    return True
 
 
 def main(args):
@@ -101,37 +146,7 @@ def main(args):
     if sync_int < MIN_SYNC_INT:
         raise ValueError("The synchronization interval is too low")
 
-    # TODO - while in execution refresh files every sync time - do it once now
-    # TODO - recursvely by each sub-dir
-    # Sync
-    print()
-    print("-------------------------------")
-    print("source_path:", source_path)
-    print("replica_path:", replica_path)
-    print("-------------------------------")
-    print()
     sync_files(source_path, replica_path, log_path)
-
-    # # Check if directories have the same content
-    # cmp = filecmp.dircmp(source_path, replica_path)
-
-    # # Replica to be replaced by source
-    # diff_files = cmp.diff_files
-
-    # # To be coppied to replica
-    # source_only = cmp.left_only
-
-    # # To be deleted
-    # replica_only = cmp.right_only
-
-    # if diff_files or source_only or replica_only:  # Different directories
-
-    #     print("Different Files", diff_files)
-    #     print("Source Only: ", source_only)
-    #     print("Replica Only: ", replica_only)
-
-    # else:  # Same directory
-    #     print("They are the same")
 
 
 if __name__ == "__main__":
