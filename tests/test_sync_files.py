@@ -1,6 +1,7 @@
 import filecmp
 import os
 import shutil
+import signal
 import tempfile
 import pytest
 from ..sync_folders import sync_files

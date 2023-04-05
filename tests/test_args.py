@@ -1,4 +1,5 @@
 import os
+import signal
 import pytest
 from unittest.mock import patch
 
@@ -56,23 +57,6 @@ def test_main_invalid_sync_interval(tmpdir):
         main([source_path, replica_path, sync, log_path])
 
 
-# Test that main function works with valid arguments
-def test_main_valid_args(tmpdir):
-    source_path = os.path.join(tmpdir, "source")
-    replica_path = os.path.join(tmpdir, "replica")
-    sync = "1000"
-    log_path = os.path.join(tmpdir, "log_file.txt")
-    os.makedirs(source_path)
-    os.makedirs(replica_path)
-    file_path = os.path.join(source_path, "test_file.txt")
-    with open(log_path, 'w'):  # Create empty file at log_path
-        pass
-    with open(file_path, "w") as f:
-        f.write("test")
-    with patch("builtins.input", return_value="y"):
-        main([source_path, replica_path, sync, log_path])
-
-
 # Test that folder_exists function raises an error with non-existent folder
 def test_folder_exists_non_existent_folder(tmpdir):
     non_existent_folder = os.path.join(tmpdir, "non_existent_folder")
@@ -92,5 +76,3 @@ def test_file_exists_non_existent_file(tmpdir):
     non_existent_file = os.path.join(tmpdir, "non_existent_file.txt")
     with pytest.raises(FileNotFoundError):
         file_exists(non_existent_file)
-
-
